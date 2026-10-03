@@ -319,6 +319,163 @@ test('категория недельного лимита всегда есть
   assert.ok(s.settings.categories.includes('Хобби'));
 });
 
+/* ——— разбор трат за месяц ——— */
+
+test('разбор месяца считает доли и сортирует категории по убыванию', () => {
+  const s = mk({
+    ops: [
+      op({ type: 'income', date: '2026-10-01', amount: 10000, to: 'cash', source: 'Смена' }),
+      op({ type: 'expense', date: '2026-10-02', amount: 2000, from: 'cash', cat: 'Еда' }),
+      op({ type: 'expense', date: '2026-10-03', amount: 2000, from: 'cash', cat: 'Еда' }),
+      op({ type: 'expense', date: '2026-10-03', amount: 1000, from: 'cash', cat: 'Проезд' }),
+      op({ type: 'transfer', date: '2026-10-03', amount: 5000, from: 'cash', to: 'bank' }), // не трата
+      op({ type: 'expense', date: '2026-09-30', amount: 9999, from: 'cash', cat: 'Еда' }),  // другой месяц
+    ],
+  });
+  const m = C.monthStats(s, '2026-10');
+  assert.equal(m.income, 10000);
+  assert.equal(m.expense, 5000);
+  assert.equal(m.saved, 5000);
+  assert.equal(m.byCat.length, 2);
+  assert.equal(m.byCat[0].cat, 'Еда');
+  assert.equal(m.byCat[0].sum, 4000);
+  assert.equal(m.byCat[0].share, 0.8);
+  assert.equal(m.byCat[1].cat, 'Проезд');
+});
+
+test('пустой месяц не делит на ноль', () => {
+  const m = C.monthStats(mk(), '2026-10');
+  assert.equal(m.expense, 0);
+  assert.equal(m.saved, 0);
+  assert.deepEqual([...m.byCat], []);
+});
+
+test('обрезка по числу месяца даёт честное сравнение с неполным месяцем', () => {
+  const s = mk({
+    ops: [
+      op({ type: 'expense', date: '2026-09-02', amount: 500, from: 'cash', cat: 'Еда' }),
+      op({ type: 'expense', date: '2026-09-20', amount: 4000, from: 'cash', cat: 'Еда' }),
+      op({ type: 'expense', date: '2026-10-02', amount: 600, from: 'cash', cat: 'Еда' }),
+    ],
+  });
+  // весь сентябрь против первых трёх дней сентября
+  assert.equal(C.monthStats(s, '2026-09').expense, 4500);
+  assert.equal(C.monthStats(s, '2026-09', 3).expense, 500);
+  // октябрь по 3-е число — рост на 100 ₽, а не мнимое падение на 3 900 ₽
+  assert.equal(C.monthStats(s, '2026-10').expense - C.monthStats(s, '2026-09', 3).expense, 100);
+});
+
+test('перебор месяцев переходит через границу года', () => {
+  assert.equal(C.prevMonth('2026-01'), '2025-12');
+  assert.equal(C.nextMonth('2026-12'), '2027-01');
+  assert.equal(C.prevMonth('2026-10'), '2026-09');
+  assert.equal(C.nextMonth('2026-10'), '2026-11');
+});
+
+/* ——— живые деньги и прогноз к дате погашения ——— */
+
+test('темп живых денег не замечает переводов между своими счетами', () => {
+  const s = mk({
+    settings: { startDate: '2026-08-01' },
+    start: { cash: 10000 },
+    ops: [op({ type: 'transfer', date: '2026-09-20', amount: 5000, from: 'cash', to: 'bank' })],
+  });
+  assert.equal(C.liquidPace(s, TODAY).delta, 0);
+});
+
+test('трата по кредитке не трогает живые деньги, но растит долг', () => {
+  const s = mk({
+    settings: { startDate: '2026-08-01' },
+    start: { cash: 10000 },
+    ops: [op({ type: 'expense', date: '2026-09-20', amount: 3000, from: 'card', cat: 'Еда' })],
+  });
+  assert.equal(C.liquidPace(s, TODAY).delta, 0);
+  assert.equal(C.cardDebt(s), 3000);
+  assert.equal(C.pace(s, TODAY).delta, -3000); // капитал при этом просел
+});
+
+test('прогноз к дате погашения отвечает, хватит ли денег', () => {
+  // 28 дней истории, +7 000 ₽ живых денег → 250 ₽/день; до 29-го 26 дней
+  const s = mk({
+    settings: { startDate: '2026-08-01', cardDueDay: 29 },
+    start: { bank: 3000, card: 5000 },
+    ops: [op({ type: 'income', date: '2026-09-20', amount: 7000, to: 'bank', source: 'Смена' })],
+  });
+  const f = C.dueForecast(s, TODAY);
+  assert.equal(f.ok, true);
+  assert.equal(f.due, '2026-10-29');
+  assert.equal(f.days, 26);
+  assert.equal(f.debt, 5000);
+  assert.equal(f.projected, 10000 + (7000 / 28) * 26);
+  assert.equal(f.enough, true);
+  assert.equal(f.gap, 0);
+});
+
+test('прогноз честно показывает нехватку', () => {
+  const s = mk({
+    settings: { startDate: '2026-08-01', cardDueDay: 29 },
+    start: { bank: 1000, card: 20000 },
+    ops: [op({ type: 'income', date: '2026-09-20', amount: 1400, to: 'bank', source: 'Смена' })],
+  });
+  const f = C.dueForecast(s, TODAY);
+  assert.equal(f.enough, false);
+  assert.ok(f.gap > 0);
+  assert.equal(Math.round(f.gap), Math.round(20000 - (2400 + (1400 / 28) * 26)));
+});
+
+test('без истории прогноз к погашению не строится', () => {
+  const s = mk({ settings: { startDate: C.addDays(TODAY, -2) }, start: { card: 5000 } });
+  const f = C.dueForecast(s, TODAY);
+  assert.equal(f.ok, false);
+  assert.equal(f.needDays, 5);
+  assert.equal(f.debt, 5000);
+});
+
+/* ——— сколько можно потратить сегодня ——— */
+
+test('дневной потолок делит остаток лимита на оставшиеся дни недели', () => {
+  // TODAY — суббота: остаются суббота и воскресенье
+  const s = mk({
+    start: { cash: 50000 },
+    ops: [op({ type: 'expense', date: '2026-09-28', amount: 1200, from: 'cash', cat: 'На себя' })],
+  });
+  const a = C.todayAllowance(s, TODAY);
+  assert.equal(a.daysLeft, 2);
+  assert.equal(a.weekLeft, 2000);
+  assert.equal(a.amount, 1000);
+  assert.equal(a.limiter, 'week');
+});
+
+test('в понедельник в запасе вся неделя', () => {
+  const s = mk({ start: { cash: 50000 } });
+  const a = C.todayAllowance(s, '2026-09-28'); // понедельник
+  assert.equal(a.daysLeft, 7);
+  assert.equal(a.amount, Math.floor(3200 / 7));
+});
+
+test('запас наличных перебивает недельный лимит, когда он ниже', () => {
+  const s = mk({ start: { cash: 20300 } }); // сверх запаса всего 300 ₽
+  const a = C.todayAllowance(s, TODAY);
+  assert.equal(a.limiter, 'cash');
+  assert.equal(a.amount, 300);
+});
+
+test('исчерпанный лимит и пробитый запас дают ноль с разными причинами', () => {
+  const spent = mk({
+    start: { cash: 50000 },
+    ops: [op({ type: 'expense', date: '2026-09-29', amount: 3200, from: 'cash', cat: 'На себя' })],
+  });
+  const a1 = C.todayAllowance(spent, TODAY);
+  assert.equal(a1.amount, 0);
+  assert.equal(a1.limiter, 'week-spent');
+
+  const broke = mk({ start: { cash: 15000 } });
+  const a2 = C.todayAllowance(broke, TODAY);
+  assert.equal(a2.amount, 0);
+  assert.equal(a2.limiter, 'cash-floor');
+  assert.equal(a2.cushion, -5000);
+});
+
 /* ——— форматирование ——— */
 
 test('числительные склоняются', () => {

@@ -14,10 +14,17 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <link rel="icon" href="./icons/icon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400..700&family=Unbounded:wght@400..700&display=swap">
 <style>
+/* Шрифты лежат в репозитории: внешних запросов у приложения нет, первая загрузка
+   работает без интернета. Обновить: node tools/fetch-fonts.mjs */
+/* FONTS:START */
+@font-face{font-family:'Golos Text';font-style:normal;font-weight:400 700;font-display:swap;src:url(./fonts/golos-text-cyrillic.woff2) format('woff2');unicode-range:U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;}
+@font-face{font-family:'Golos Text';font-style:normal;font-weight:400 700;font-display:swap;src:url(./fonts/golos-text-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;}
+@font-face{font-family:'Golos Text';font-style:normal;font-weight:400 700;font-display:swap;src:url(./fonts/golos-text-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}
+@font-face{font-family:'Unbounded';font-style:normal;font-weight:400 700;font-display:swap;src:url(./fonts/unbounded-cyrillic.woff2) format('woff2');unicode-range:U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;}
+@font-face{font-family:'Unbounded';font-style:normal;font-weight:400 700;font-display:swap;src:url(./fonts/unbounded-latin.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}
+/* FONTS:END */
+
 :root{
   --ink:#0d121c; --surface:#151d2a; --surface-2:#1d2736; --line:#27354a;
   --text:#e9eef7; --muted:#8c9ab2;
@@ -25,7 +32,9 @@
   --teal-dim:#1d3b36; --ember-dim:#3a2219; --amber-dim:#3a3018;
   --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
   --safe-l:env(safe-area-inset-left,0px); --safe-r:env(safe-area-inset-right,0px);
-  --display:'Unbounded',-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
+  /* Golos Text в стеке не случайно: у Unbounded не загружается подсет со знаком ₽,
+     и браузер по unicode-range берёт рубль отсюда. */
+  --display:'Unbounded','Golos Text',-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
   --body:'Golos Text',-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Arial,sans-serif;
   --r:16px;
 }
@@ -139,6 +148,37 @@ main{padding:18px calc(var(--safe-r) + 16px) calc(var(--safe-b) + 108px) calc(va
 .rung.active .meta{color:var(--text)}
 .rung .pct{display:block;font-size:11px;color:var(--muted)}
 .rung.active .pct{color:var(--teal);font-weight:600;font-size:12px}
+
+/* ——— дневной потолок ——— */
+.allow{font-family:var(--display);font-weight:600;font-size:26px;letter-spacing:-.025em;margin-top:10px}
+.allow.stop{color:var(--ember)}
+.why{font-size:12.5px;color:var(--muted);margin-top:4px}
+.verdict{font-size:13px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);line-height:1.5}
+.verdict.good{color:var(--teal)}
+.verdict.bad{color:var(--ember)}
+
+/* ——— разбор месяца ——— */
+.monthnav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.monthnav span{font-family:var(--display);font-weight:600;font-size:16px;letter-spacing:-.01em}
+.monthnav button{width:40px;height:40px;border-radius:12px;background:var(--surface);
+  border:1px solid var(--line);font-size:19px;color:var(--muted);flex:0 0 auto}
+.monthnav button[disabled]{opacity:.3}
+.sum3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.sum3 div{min-width:0}
+.sum3 .k{font-size:11.5px;color:var(--muted)}
+.sum3 .v{font-family:var(--display);font-weight:600;font-size:16px;margin-top:4px;letter-spacing:-.02em}
+.sum3 .in .v{color:var(--teal)}
+.sum3 .out .v{color:var(--ember)}
+.catrow{margin-top:14px}
+.catrow:first-of-type{margin-top:4px}
+.catline{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.catline .c{font-size:14px;font-weight:500}
+.catline .s{font-family:var(--display);font-weight:600;font-size:14px;letter-spacing:-.02em;white-space:nowrap}
+.bar.cat{height:5px;margin-top:7px}
+.bar.cat > span{background:var(--ember)}
+.catmeta{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;color:var(--muted);margin-top:5px}
+.catmeta .up{color:var(--ember)}
+.catmeta .down{color:var(--teal)}
 
 /* ——— история ——— */
 .dayhead{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:16px 2px 8px}
@@ -576,6 +616,98 @@ var CORE = (function () {
       });
   }
 
+  /* ——— разбор трат за месяц ———
+     maxDay обрезает месяц по число включительно. Нужно, чтобы сравнивать
+     неполный текущий месяц с теми же днями прошлого, а не с полным. */
+  function monthStats(state, ym, maxDay) {
+    var cap = maxDay == null ? 31 : maxDay;
+    var income = 0, expense = 0, cats = {};
+    for (var i = 0; i < state.ops.length; i++) {
+      var o = state.ops[i];
+      if (o.date.slice(0, 7) !== ym) continue;
+      if (Number(o.date.slice(8, 10)) > cap) continue;
+      var a = num(o.amount);
+      if (o.type === 'income') income += a;
+      else if (o.type === 'expense') {
+        expense += a;
+        cats[o.cat] = (cats[o.cat] || 0) + a;
+      }
+    }
+    var byCat = Object.keys(cats).map(function (c) {
+      return { cat: c, sum: cats[c], share: expense > 0 ? cats[c] / expense : 0 };
+    }).sort(function (a, b) { return b.sum - a.sum; });
+    return { ym: ym, income: income, expense: expense, saved: income - expense, byCat: byCat };
+  }
+
+  function prevMonth(ym) {
+    var y = Number(ym.slice(0, 4)), m = Number(ym.slice(5, 7)) - 1;
+    m--; if (m < 0) { m = 11; y--; }
+    return y + '-' + String(m + 1).padStart(2, '0');
+  }
+  function nextMonth(ym) {
+    var y = Number(ym.slice(0, 4)), m = Number(ym.slice(5, 7)) - 1;
+    m++; if (m > 11) { m = 0; y++; }
+    return y + '-' + String(m + 1).padStart(2, '0');
+  }
+
+  /* ——— живые деньги: наличные плюс банк, без учёта долга ——— */
+  function liquidAt(state, upto) {
+    var b = balancesAt(state, upto);
+    return b.cash + b.bank;
+  }
+
+  /* Темп живых денег считается отдельно от капитала: трата по кредитке
+     капитал уменьшает, а наличность — нет, и для вопроса «хватит ли денег
+     к дате погашения» важна именно наличность. */
+  function liquidPace(state, today) {
+    var sd = state.settings.startDate || today;
+    var hist = Math.max(0, daysBetween(sd, today));
+    if (hist < 7) return { ok: false, needDays: 7 - hist, perWeek: 0, perDay: 0, windowDays: hist };
+    var win = Math.min(28, hist);
+    var delta = liquidAt(state, today) - liquidAt(state, addDays(today, -win));
+    return { ok: true, needDays: 0, perWeek: delta * 7 / win, perDay: delta / win, windowDays: win, delta: delta };
+  }
+
+  function dueForecast(state, today) {
+    var due = nextDue(today, state.settings.cardDueDay);
+    var days = daysBetween(today, due);
+    var debt = cardDebt(state);
+    var lp = liquidPace(state, today);
+    if (!lp.ok) return { due: due, days: days, debt: debt, ok: false, needDays: lp.needDays };
+    var projected = liquidAt(state, null) + lp.perDay * days;
+    return {
+      due: due, days: days, debt: debt, ok: true, projected: projected,
+      enough: projected >= debt,
+      gap: Math.max(0, debt - projected),
+      rest: Math.max(0, projected - debt),
+      perWeek: lp.perWeek
+    };
+  }
+
+  /* ——— сколько можно потратить сегодня ———
+     Потолок — остаток недельного лимита, размазанный по оставшимся дням недели,
+     но не больше того, что есть сверх запаса наличных. */
+  function todayAllowance(state, today) {
+    var s = state.settings;
+    var spent = weekSpend(state, today);
+    var weekLeft = s.weekLimit - spent;
+    var daysLeft = 7 - daysBetween(mondayOf(today), today);
+    var cushion = balances(state).cash - s.minCash;
+    if (weekLeft <= 0) {
+      return { amount: 0, limiter: 'week-spent', weekLeft: weekLeft, daysLeft: daysLeft, cushion: cushion };
+    }
+    if (cushion <= 0) {
+      return { amount: 0, limiter: 'cash-floor', weekLeft: weekLeft, daysLeft: daysLeft, cushion: cushion };
+    }
+    var perDay = daysLeft > 0 ? weekLeft / daysLeft : weekLeft;
+    var limiter = 'week', amount = perDay;
+    if (cushion < perDay) { amount = cushion; limiter = 'cash'; }
+    return {
+      amount: Math.floor(amount), limiter: limiter,
+      weekLeft: weekLeft, daysLeft: daysLeft, cushion: cushion
+    };
+  }
+
   /* Удаление операции расцепляет долг, который этой операцией был закрыт. */
   function removeOp(state, id) {
     return {
@@ -607,7 +739,10 @@ var CORE = (function () {
     balancesAt: balancesAt, balances: balances, cardDebt: cardDebt,
     owedAt: owedAt, netAt: netAt, net: net,
     weekSpend: weekSpend, pace: pace, forecast: forecast, ladderFill: ladderFill,
-    combos: combos, removeOp: removeOp, sortedOps: sortedOps
+    combos: combos, removeOp: removeOp, sortedOps: sortedOps,
+    monthStats: monthStats, prevMonth: prevMonth, nextMonth: nextMonth,
+    liquidAt: liquidAt, liquidPace: liquidPace, dueForecast: dueForecast,
+    todayAllowance: todayAllowance
   };
 })();
 /* ===== CORE:END ===== */
@@ -626,8 +761,10 @@ var CORE = (function () {
 
   var dfDay = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
   var dfWd = new Intl.DateTimeFormat('ru-RU', { weekday: 'long' });
+  var dfMonth = new Intl.DateTimeFormat('ru-RU', { month: 'long' });
 
-  var state, tab = 'home', histFilter = 'all', sheet = null, draft = null, toastTimer = null;
+  var state, tab = 'home', histFilter = 'all', histMonth = null;
+  var sheet = null, draft = null, toastTimer = null;
 
   var $ = function (id) { return document.getElementById(id); };
   function esc(s) {
@@ -787,7 +924,8 @@ var CORE = (function () {
         '<div class="due"><span class="n' + (left <= 5 ? ' soon' : '') + '">' +
         (left === 0 ? 'сегодня' : left + ' ' + CORE.plural(left, ['день', 'дня', 'дней'])) +
         '</span><span class="w">' + (left === 0 ? 'последний день' : 'на погашение') + '</span></div>' +
-        '<button class="ghost" data-pay="1">Погасить с банка</button>';
+        '<button class="ghost" data-pay="1">Погасить с банка</button>' +
+        dueVerdict(today);
     } else {
       h += '<div class="big-line">Долга нет</div>' +
         '<div class="due"><span class="w">Следующая дата списания — ' + esc(dueTxt) + '</span></div>';
@@ -795,16 +933,50 @@ var CORE = (function () {
     return h + '</div>';
   }
 
+  /* Соединяет то, что приложение уже знает: долг, дату и темп живых денег. */
+  function dueVerdict(today) {
+    var f = CORE.dueForecast(state, today);
+    if (!f.ok || f.debt <= 0) return '';
+    var when = dfDay.format(CORE.parseDate(f.due));
+    if (f.enough) {
+      return '<div class="verdict good">К ' + esc(when) + ' накопится около ' +
+        esc(CORE.money(f.projected)) + ' — долг закроется, останется ' +
+        esc(CORE.money(f.rest)) + '.</div>';
+    }
+    return '<div class="verdict bad">К ' + esc(when) + ' накопится около ' +
+      esc(CORE.money(f.projected)) + ' — не хватит ' + esc(CORE.money(f.gap)) +
+      '. Нужно откладывать быстрее или гасить частями.</div>';
+  }
+
   function weekBlock(today) {
     var s = state.settings, spent = CORE.weekSpend(state, today), lim = s.weekLimit;
     var leftSum = lim - spent;
     var pct = lim > 0 ? Math.min(100, (spent / lim) * 100) : 0;
     var over = leftSum < 0;
+    var a = CORE.todayAllowance(state, today);
+
+    // Главная строка всегда одной формы — глазу не нужно заново искать число.
+    // Причина меняется и не повторяет предупреждение о запасе, которое висит выше.
+    var stop = a.limiter === 'week-spent' || a.limiter === 'cash-floor';
+    var why;
+    if (a.limiter === 'week-spent') {
+      why = over ? 'Недельный лимит исчерпан, перерасход ' + CORE.money(-leftSum) +
+        ' — на следующую неделю он не переносится.'
+        : 'Недельный лимит выбран ровно.';
+    } else if (a.limiter === 'cash-floor') {
+      why = 'Пока запас наличных не восстановлен, тратить не из чего.';
+    } else if (a.limiter === 'cash') {
+      why = 'Ограничивает запас наличных: сверх него осталось ' + CORE.money(a.cushion) + '.';
+    } else {
+      why = CORE.money(a.weekLeft) + ' на ' + a.daysLeft + ' ' +
+        CORE.plural(a.daysLeft, ['день', 'дня', 'дней']) + ' до конца недели.';
+    }
+    var big = '<div class="allow' + (stop ? ' stop' : '') + '">Сегодня можно ' +
+      CORE.money(a.amount) + '</div>';
+
     return '<div class="card"><div class="row-between"><h2>' + esc(s.budgetCategory) +
       ' · эта неделя</h2><span class="note">с понедельника</span></div>' +
-      '<div class="big-line"' + (over ? ' style="color:var(--ember)"' : '') + '>' +
-      (over ? 'Перерасход ' + esc(CORE.money(-leftSum)) : esc(CORE.money(leftSum)) + ' осталось') +
-      '</div>' +
+      big + '<div class="why">' + esc(why) + '</div>' +
       '<div class="bar' + (over ? ' over' : '') + '"><span style="width:' + (over ? 100 : pct) + '%"></span></div>' +
       '<div class="foot"><span>Потрачено ' + esc(CORE.money(spent)) + '</span>' +
       '<span>Лимит ' + esc(CORE.money(lim)) + '</span></div></div>';
@@ -847,10 +1019,69 @@ var CORE = (function () {
     return dfDay.format(d) + ', ' + dfWd.format(d);
   }
 
+  function monthName(ym) {
+    var d = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, 1);
+    return dfMonth.format(d) + ' ' + ym.slice(0, 4);
+  }
+
+  /* Разбор месяца: куда ушли деньги и как это отличается от прошлого месяца. */
+  function monthBlock(ym) {
+    var today = CORE.todayStr();
+    var partial = ym === today.slice(0, 7);
+    // Текущий месяц сравниваем с тем же отрезком прошлого — иначе «меньше»
+    // означало бы лишь то, что месяц ещё не кончился.
+    var cap = partial ? Number(today.slice(8, 10)) : null;
+    var m = CORE.monthStats(state, ym);
+    var prev = CORE.monthStats(state, CORE.prevMonth(ym), cap);
+    var hadPrev = prev.expense > 0 || prev.income > 0;
+    var vsLabel = partial ? 'за те же дни прошлого месяца' : 'к прошлому месяцу';
+
+    var h = '<div class="card"><div class="sum3">' +
+      '<div class="in"><div class="k">Доходы</div><div class="v">' + esc(CORE.money(m.income)) + '</div></div>' +
+      '<div class="out"><div class="k">Траты</div><div class="v">' + esc(CORE.money(m.expense)) + '</div></div>' +
+      '<div><div class="k">' + (m.saved < 0 ? 'Проедено' : 'Отложено') + '</div><div class="v">' +
+      esc(CORE.money(Math.abs(m.saved))) + '</div></div></div>';
+
+    if (!m.byCat.length) {
+      h += '<div class="why" style="margin-top:14px">Трат в этом месяце ещё нет.</div></div>';
+      return h;
+    }
+
+    var top = m.byCat[0].sum;
+    h += '<div style="margin-top:16px">';
+    m.byCat.forEach(function (c) {
+      var was = prev.byCat.find(function (p) { return p.cat === c.cat; });
+      var delta = hadPrev ? c.sum - (was ? was.sum : 0) : null;
+      var deltaHtml = '';
+      if (delta !== null && Math.round(delta) !== 0) {
+        var up = delta > 0;
+        deltaHtml = '<span class="' + (up ? 'up' : 'down') + '">' + (up ? '▲' : '▼') + ' ' +
+          esc(CORE.money(Math.abs(delta))) + ' ' + esc(vsLabel) + '</span>';
+      }
+      h += '<div class="catrow"><div class="catline">' +
+        '<span class="c">' + esc(c.cat) + '</span>' +
+        '<span class="s">' + esc(CORE.money(c.sum)) + '</span></div>' +
+        '<div class="bar cat"><span style="width:' + (top > 0 ? (c.sum / top) * 100 : 0).toFixed(1) + '%"></span></div>' +
+        '<div class="catmeta"><span>' + Math.round(c.share * 100) + '% трат</span>' + deltaHtml + '</div></div>';
+    });
+    return h + '</div></div>';
+  }
+
   function renderHistory() {
-    var ops = CORE.sortedOps(state);
+    var curYm = CORE.todayStr().slice(0, 7);
+    var ym = histMonth || curYm;
+    var ops = CORE.sortedOps(state).filter(function (o) { return o.date.slice(0, 7) === ym; });
     if (histFilter !== 'all') ops = ops.filter(function (o) { return o.type === histFilter; });
-    var h = '<div class="chips" style="margin-bottom:4px">' +
+
+    var h = '<div class="monthnav">' +
+      '<button data-mon="prev" aria-label="Предыдущий месяц">‹</button>' +
+      '<span>' + esc(monthName(ym)) + '</span>' +
+      '<button data-mon="next" aria-label="Следующий месяц"' + (ym >= curYm ? ' disabled' : '') + '>›</button>' +
+      '</div>';
+
+    h += monthBlock(ym);
+
+    h += '<div class="chips" style="margin:18px 0 4px">' +
       [['all', 'Все'], ['income', 'Доход'], ['expense', 'Трата'], ['transfer', 'Перевод']]
         .map(function (f) {
           return '<button class="chip" data-filter="' + f[0] + '" aria-pressed="' +
@@ -858,9 +1089,9 @@ var CORE = (function () {
         }).join('') + '</div>';
 
     if (!ops.length) {
-      h += '<div class="empty"><b>Операций пока нет</b>' +
-        (histFilter === 'all' ? 'Нажмите «Доход», «Трата» или «Перевод» внизу экрана.'
-          : 'По этому фильтру ничего не нашлось.') + '</div>';
+      h += '<div class="empty"><b>Операций нет</b>' +
+        (histFilter === 'all' ? 'В этом месяце ничего не записано.'
+          : 'По этому фильтру в этом месяце ничего не нашлось.') + '</div>';
       $('tab-history').innerHTML = h;
       return;
     }
@@ -1306,6 +1537,11 @@ var CORE = (function () {
     if (sheet && (t = e.target.closest('#sheet [data-a]'))) return sheet.act(t.dataset.a, t);
 
     if ((t = e.target.closest('[data-filter]'))) { histFilter = t.dataset.filter; return renderHistory(); }
+    if ((t = e.target.closest('[data-mon]'))) {
+      var cur = histMonth || CORE.todayStr().slice(0, 7);
+      histMonth = t.dataset.mon === 'prev' ? CORE.prevMonth(cur) : CORE.nextMonth(cur);
+      return renderHistory();
+    }
     if ((t = e.target.closest('[data-op]'))) {
       var op = state.ops.find(function (o) { return o.id === t.dataset.op; });
       if (op) openOp(op.type, op);

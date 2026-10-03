@@ -1,13 +1,18 @@
 /* Service worker: оболочка берётся из кеша, поэтому приложение открывается без сети.
    Имя кеша версионированное — при обновлении старые кеши удаляются в activate. */
-var CACHE = 'fincontrol-v1';
+var CACHE = 'fincontrol-v2';
 var SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/apple-touch-icon.png'
+  './icons/apple-touch-icon.png',
+  './fonts/golos-text-cyrillic.woff2',
+  './fonts/golos-text-latin-ext.woff2',
+  './fonts/golos-text-latin.woff2',
+  './fonts/unbounded-cyrillic.woff2',
+  './fonts/unbounded-latin.woff2'
 ];
 
 self.addEventListener('install', function (e) {
