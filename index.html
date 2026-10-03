@@ -1002,8 +1002,7 @@ var CORE = (function () {
       numField('Число месяца для погашения кредитки', 'cardDueDay', s.cardDueDay,
         'Повторяется каждый месяц. В коротком месяце сдвигается на последний день.') + '</div>';
 
-    h += listEditor('Цели', 'goals', s.settings === undefined ? s.goals : s.goals,
-      'Лестница на главной строится по этому списку.');
+    h += listEditor('Цели', 'goals', s.goals, 'Лестница на главной строится по этому списку.');
     h += listEditor('Источники дохода', 'sources', s.sources, '');
     h += listEditor('Категории трат', 'categories', s.categories, '');
 
