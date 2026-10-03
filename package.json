@@ -1,0 +1,13 @@
+{
+  "name": "fincontrol",
+  "version": "1.0.0",
+  "description": "Учёт личных финансов на одной HTML-странице: PWA, офлайн, данные в localStorage",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/core.test.mjs",
+    "serve": "node tools/serve.mjs 8765",
+    "icons": "node tools/make-icons.mjs"
+  },
+  "license": "MIT"
+}
