@@ -878,7 +878,7 @@ var CORE = (function () {
       '</div>';
 
     h += cardBlock(today, debt);
-    h += weekBlock(today);
+    h += weekBlock(today, untouched);
     h += ladderBlock(n, today);
     $('tab-home').innerHTML = h;
   }
@@ -948,11 +948,22 @@ var CORE = (function () {
       '. Нужно откладывать быстрее или гасить частями.</div>';
   }
 
-  function weekBlock(today) {
+  function weekBlock(today, untouched) {
     var s = state.settings, spent = CORE.weekSpend(state, today), lim = s.weekLimit;
     var leftSum = lim - spent;
     var pct = lim > 0 ? Math.min(100, (spent / lim) * 100) : 0;
     var over = leftSum < 0;
+
+    // На пустом приложении дневной потолок был бы нулём только потому,
+    // что балансы ещё не введены. Это не ответ, а шум.
+    if (untouched) {
+      return '<div class="card"><div class="row-between"><h2>' + esc(s.budgetCategory) +
+        ' · эта неделя</h2><span class="note">с понедельника</span></div>' +
+        '<div class="allow">' + esc(CORE.money(lim)) + ' на неделю</div>' +
+        '<div class="why">Дневной потолок появится, когда укажете стартовые балансы.</div>' +
+        '<div class="bar"><span style="width:0%"></span></div></div>';
+    }
+
     var a = CORE.todayAllowance(state, today);
 
     // Главная строка всегда одной формы — глазу не нужно заново искать число.
