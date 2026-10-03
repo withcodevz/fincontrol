@@ -44,8 +44,15 @@ body{
   margin:0;background:var(--ink);color:var(--text);font-family:var(--body);
   font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased;
   overscroll-behavior-y:none;font-variant-numeric:tabular-nums;
+  /* Гасит жест «двойной тап = приблизить»: без этого два быстрых нажатия по
+     одной кнопке клавиатуры Safari принимает за масштабирование, а не за ввод.
+     Прокрутка и щипок сохраняются — manipulation = pan-x pan-y pinch-zoom. */
+  touch-action:manipulation;
 }
 button,input,select,textarea{font:inherit;color:inherit;font-variant-numeric:inherit}
+/* touch-action не наследуется, а обход предков Safari поддерживает только
+   с iOS 13 — поэтому дублируем правило с body прямо на том, по чему тапают. */
+button,input,select,textarea,label,[role="tab"]{touch-action:manipulation}
 button{background:none;border:0;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
 :focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:6px}
 h1,h2,h3,p{margin:0}
