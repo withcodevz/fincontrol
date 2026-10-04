@@ -476,6 +476,106 @@ test('исчерпанный лимит и пробитый запас дают 
   assert.equal(a2.cushion, -5000);
 });
 
+/* ——— корректировка балансов ——— */
+
+const adj = (o) => op(Object.assign({ type: 'adjust' }, o));
+
+test('корректировка двигает баланс счёта на свою величину', () => {
+  const s = mk({
+    start: { bank: 1000 },
+    ops: [
+      op({ type: 'transfer', date: '2026-10-01', amount: 6700, from: 'bank', to: 'card' }),
+      adj({ date: TODAY, account: 'bank', amount: 5700 }),
+    ],
+  });
+  assert.equal(C.balances(s).bank, 0); // 1000 − 6700 + 5700
+});
+
+test('корректировка кредитки уменьшает долг', () => {
+  const s = mk({
+    start: { card: 5000 },
+    ops: [adj({ date: TODAY, account: 'card', amount: 2000 })],
+  });
+  assert.equal(C.cardDebt(s), 3000);
+});
+
+test('корректировка не считается ни доходом, ни тратой', () => {
+  const s = mk({
+    ops: [
+      op({ type: 'income', date: '2026-10-01', amount: 3000, to: 'cash', source: 'Смена' }),
+      adj({ date: '2026-10-02', account: 'bank', amount: 5700 }),
+      adj({ date: '2026-10-02', account: 'cash', amount: -400 }),
+    ],
+  });
+  const m = C.monthStats(s, '2026-10');
+  assert.equal(m.income, 3000, 'корректировка не доход');
+  assert.equal(m.expense, 0, 'корректировка не трата');
+  assert.deepEqual([...m.byCat], [], 'корректировка не попадает в категории');
+});
+
+test('корректировка не раздувает темп накоплений', () => {
+  const base = {
+    settings: { startDate: '2026-08-01' },
+    ops: [op({ type: 'income', date: '2026-09-20', amount: 7000, to: 'bank', source: 'Смена' })],
+  };
+  const clean = mk(base);
+  assert.equal(C.pace(clean, TODAY).perWeek, 1750);
+
+  // та же история плюс исправление ошибки учёта на 10 000 ₽
+  const fixed = mk({
+    settings: base.settings,
+    ops: base.ops.concat([adj({ date: '2026-09-21', account: 'bank', amount: 10000 })]),
+  });
+  assert.equal(C.net(fixed), C.net(clean) + 10000, 'капитал меняется');
+  assert.equal(C.pace(fixed, TODAY).perWeek, 1750, 'а темп — нет');
+});
+
+test('корректировка не раздувает темп живых денег', () => {
+  const s = mk({
+    settings: { startDate: '2026-08-01' },
+    start: { bank: 1000 },
+    ops: [adj({ date: '2026-09-21', account: 'bank', amount: 10000 })],
+  });
+  assert.equal(C.liquidPace(s, TODAY).delta, 0);
+  assert.equal(C.liquidAt(s, null), 11000);
+});
+
+test('корректировка кредитки не влияет на живые деньги, но меняет капитал', () => {
+  const s = mk({
+    settings: { startDate: '2026-08-01' },
+    start: { card: 5000 },
+    ops: [adj({ date: '2026-09-21', account: 'card', amount: 5000 })],
+  });
+  assert.equal(C.liquidPace(s, TODAY).delta, 0);
+  assert.equal(C.pace(s, TODAY).perWeek, 0, 'списание долга не является накоплением');
+  assert.equal(C.net(s), 0);
+});
+
+test('валидация принимает корректировку и отвергает бессмысленную', () => {
+  const good = mk({ ops: [adj({ date: TODAY, account: 'bank', amount: -5700 })] });
+  assert.equal(C.validate(good), null);
+
+  assert.ok(C.validate({ settings: {}, debts: [], ops: [{ id: 'a', type: 'adjust', date: TODAY, amount: 0, account: 'bank' }] }),
+    'нулевая корректировка бессмысленна');
+  assert.ok(C.validate({ settings: {}, debts: [], ops: [{ id: 'a', type: 'adjust', date: TODAY, amount: 100 }] }),
+    'корректировка без счёта недопустима');
+});
+
+test('migrate сохраняет корректировки, включая отрицательные', () => {
+  const s = C.migrate({
+    settings: {},
+    ops: [
+      { id: 'a', type: 'adjust', date: TODAY, amount: -5700, account: 'bank' },
+      { id: 'b', type: 'adjust', date: TODAY, amount: 0, account: 'bank' },
+      { id: 'c', type: 'adjust', date: TODAY, amount: 100, account: 'кошелёк' },
+    ],
+    debts: [],
+  }, TODAY);
+  assert.equal(s.ops.length, 1);
+  assert.equal(s.ops[0].amount, -5700);
+  assert.equal(s.ops[0].account, 'bank');
+});
+
 /* ——— поведение на телефоне ——— */
 
 test('двойной тап по странице не приближает экран', () => {
@@ -489,6 +589,19 @@ test('двойной тап по странице не приближает эк
     /touch-action:manipulation/,
     'у body должен быть touch-action: manipulation — он гасит двойной тап, сохраняя прокрутку и щипок'
   );
+});
+
+test('показ листа не зависит от наступления кадра', () => {
+  // Раньше класс «on» добавлялся внутри requestAnimationFrame. В фоновой
+  // вкладке кадр не наступает, класс не доезжает, и лист остаётся за краем
+  // экрана: он есть в разметке и принимает нажатия, но его не видно.
+  const open = /function openSheet\(cfg\) \{[\s\S]*?\n  \}/.exec(html);
+  assert.ok(open, 'не найдена функция openSheet');
+  // Комментарии выкидываем: там это слово упомянуто как описание прошлой ошибки.
+  const code = open[0].replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(code, /requestAnimationFrame/,
+    'openSheet не должна ждать кадра — нужен синхронный пересчёт стилей');
+  assert.match(code, /offsetHeight/, 'нужен принудительный пересчёт перед добавлением класса');
 });
 
 test('масштабирование щипком остаётся доступным', () => {

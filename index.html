@@ -199,6 +199,8 @@ main{padding:18px calc(var(--safe-r) + 16px) calc(var(--safe-b) + 108px) calc(va
 .op.income .mark{background:var(--teal-dim);color:var(--teal)}
 .op.expense .mark{background:var(--ember-dim);color:var(--ember)}
 .op.transfer .mark{background:#241f3d;color:var(--violet)}
+.op.adjust .mark{background:var(--amber-dim);color:var(--amber)}
+.op.adjust .amt{color:var(--muted)}
 .op .mid{flex:1;min-width:0}
 .op .t1{display:block;font-size:14.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .op .t2{display:block;font-size:12px;color:var(--muted);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -356,7 +358,9 @@ var CORE = (function () {
   'use strict';
 
   var ACCOUNTS = ['cash', 'bank', 'card'];
-  var TYPES = ['income', 'expense', 'transfer'];
+  // adjust — ручная поправка баланса счёта. Сумма со знаком: сколько прибавить
+  // к балансу, чтобы он сошёлся с реальностью. Это не доход и не трата.
+  var TYPES = ['income', 'expense', 'transfer', 'adjust'];
   var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
   var MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
@@ -429,7 +433,14 @@ var CORE = (function () {
       amount: num(o.amount),
       note: String(o.note || '')
     };
-    if (!op.id || !op.date || !(op.amount > 0)) return null;
+    if (!op.id || !op.date) return null;
+    if (o.type === 'adjust') {
+      // Поправка может быть и в минус, но нулевая бессмысленна.
+      if (!isFinite(op.amount) || op.amount === 0) return null;
+      op.account = o.account;
+      return ACCOUNTS.indexOf(op.account) < 0 ? null : op;
+    }
+    if (!(op.amount > 0)) return null;
     if (o.type === 'income') { op.to = o.to; op.source = String(o.source || 'Другое'); }
     if (o.type === 'expense') { op.from = o.from; op.cat = String(o.cat || 'Другое'); }
     if (o.type === 'transfer') { op.from = o.from; op.to = o.to; }
@@ -495,6 +506,12 @@ var CORE = (function () {
       var o = obj.ops[i];
       if (!o || TYPES.indexOf(o.type) < 0) return 'Операция ' + (i + 1) + ': неизвестный тип';
       if (!DATE_RE.test(o.date || '')) return 'Операция ' + (i + 1) + ': нет даты';
+      if (o.type === 'adjust') {
+        if (!isFinite(num(o.amount)) || num(o.amount) === 0)
+          return 'Операция ' + (i + 1) + ': корректировка не может быть нулевой';
+        if (ACCOUNTS.indexOf(o.account) < 0) return 'Операция ' + (i + 1) + ': у корректировки нет счёта';
+        continue;
+      }
       if (!(num(o.amount) > 0)) return 'Операция ' + (i + 1) + ': сумма должна быть больше нуля';
       if (o.type === 'income' && ACCOUNTS.indexOf(o.to) < 0) return 'Операция ' + (i + 1) + ': нет счёта поступления';
       if (o.type === 'expense' && ACCOUNTS.indexOf(o.from) < 0) return 'Операция ' + (i + 1) + ': нет счёта списания';
@@ -525,6 +542,7 @@ var CORE = (function () {
         if (b[op.from] !== undefined) b[op.from] -= a;
         if (b[op.to] !== undefined) b[op.to] += a;
       }
+      else if (op.type === 'adjust') { if (b[op.account] !== undefined) b[op.account] += a; }
     }
     return b;
   }
@@ -562,12 +580,31 @@ var CORE = (function () {
   }
 
   /* ——— темп накоплений и прогноз ——— */
+
+  /* Сумма корректировок в полуинтервале (after, upto] — ровно тот отрезок,
+     который попадает в разницу между двумя срезами баланса. */
+  function adjustSum(state, after, upto, accounts) {
+    var s = 0;
+    for (var i = 0; i < state.ops.length; i++) {
+      var o = state.ops[i];
+      if (o.type !== 'adjust') continue;
+      if (after && o.date <= after) continue;
+      if (upto && o.date > upto) continue;
+      if (accounts && accounts.indexOf(o.account) < 0) continue;
+      s += num(o.amount);
+    }
+    return s;
+  }
+
+  /* Корректировка исправляет ошибку учёта, а не является накоплением: если её
+     не вычесть, одна поправка на месяц раздувает прогноз по всем целям. */
   function pace(state, today) {
     var sd = state.settings.startDate || today;
     var hist = Math.max(0, daysBetween(sd, today));
     if (hist < 7) return { ok: false, needDays: 7 - hist, perWeek: 0, windowDays: hist, delta: 0 };
     var win = Math.min(28, hist);
-    var delta = netAt(state, today) - netAt(state, addDays(today, -win));
+    var from = addDays(today, -win);
+    var delta = netAt(state, today) - netAt(state, from) - adjustSum(state, from, today, null);
     return { ok: true, needDays: 0, perWeek: delta * 7 / win, windowDays: win, delta: delta };
   }
 
@@ -671,7 +708,9 @@ var CORE = (function () {
     var hist = Math.max(0, daysBetween(sd, today));
     if (hist < 7) return { ok: false, needDays: 7 - hist, perWeek: 0, perDay: 0, windowDays: hist };
     var win = Math.min(28, hist);
-    var delta = liquidAt(state, today) - liquidAt(state, addDays(today, -win));
+    var from = addDays(today, -win);
+    var delta = liquidAt(state, today) - liquidAt(state, from) -
+      adjustSum(state, from, today, ['cash', 'bank']);
     return { ok: true, needDays: 0, perWeek: delta * 7 / win, perDay: delta / win, windowDays: win, delta: delta };
   }
 
@@ -746,7 +785,7 @@ var CORE = (function () {
     balancesAt: balancesAt, balances: balances, cardDebt: cardDebt,
     owedAt: owedAt, netAt: netAt, net: net,
     weekSpend: weekSpend, pace: pace, forecast: forecast, ladderFill: ladderFill,
-    combos: combos, removeOp: removeOp, sortedOps: sortedOps,
+    combos: combos, removeOp: removeOp, sortedOps: sortedOps, adjustSum: adjustSum,
     monthStats: monthStats, prevMonth: prevMonth, nextMonth: nextMonth,
     liquidAt: liquidAt, liquidPace: liquidPace, dueForecast: dueForecast,
     todayAllowance: todayAllowance
@@ -771,7 +810,7 @@ var CORE = (function () {
   var dfMonth = new Intl.DateTimeFormat('ru-RU', { month: 'long' });
 
   var state, tab = 'home', histFilter = 'all', histMonth = null;
-  var sheet = null, draft = null, toastTimer = null;
+  var sheet = null, draft = null, toastTimer = null, closeTimer = null;
 
   var $ = function (id) { return document.getElementById(id); };
   function esc(s) {
@@ -1136,8 +1175,15 @@ var CORE = (function () {
       mark = '+'; t1 = o.source; t2 = 'на ' + ACC_TO[o.to]; amt = '+' + CORE.money(o.amount);
     } else if (o.type === 'expense') {
       mark = '−'; t1 = o.cat; t2 = 'с ' + ACC_FROM[o.from]; amt = '−' + CORE.money(o.amount);
-    } else {
+    } else if (o.type === 'transfer') {
       mark = '⇄'; t1 = ACC[o.from] + ' → ' + ACC[o.to]; t2 = 'перевод'; amt = CORE.money(o.amount);
+    } else {
+      mark = '±';
+      t1 = 'Корректировка · ' + ACC[o.account];
+      t2 = o.account === 'card'
+        ? (o.amount > 0 ? 'долг уменьшен вручную' : 'долг увеличен вручную')
+        : (o.amount > 0 ? 'баланс увеличен вручную' : 'баланс уменьшен вручную');
+      amt = (o.amount > 0 ? '+' : '−') + CORE.money(Math.abs(o.amount));
     }
     if (o.note) t2 += ' · ' + o.note;
     return '<button class="op ' + o.type + '" data-op="' + esc(o.id) + '">' +
@@ -1239,6 +1285,21 @@ var CORE = (function () {
       '<label class="field"><span>Дата отсчёта</span>' +
       '<input class="inp" type="date" data-set="startDate" value="' + esc(s.startDate) + '"></label></div>';
 
+    var b = CORE.balances(state);
+    h += '<div class="card setgroup"><h3>Фактические балансы</h3>' +
+      '<div class="note">Если приложение разошлось с реальностью, впишите, сколько есть на самом деле. ' +
+      'Разница запишется отдельной операцией «Корректировка» — её видно в истории и можно удалить. ' +
+      'Прошлые балансы при этом не переписываются.</div>' +
+      '<div class="grid2">' +
+      '<label class="field" style="margin:0"><span>Наличные сейчас</span>' +
+      '<input class="inp" type="text" inputmode="numeric" data-fix="cash" value="' + Math.round(b.cash) + '"></label>' +
+      '<label class="field" style="margin:0"><span>На банке сейчас</span>' +
+      '<input class="inp" type="text" inputmode="numeric" data-fix="bank" value="' + Math.round(b.bank) + '"></label>' +
+      '</div>' +
+      '<label class="field"><span>Долг по кредитке сейчас</span>' +
+      '<input class="inp" type="text" inputmode="numeric" data-fix="card" value="' +
+      Math.round(CORE.cardDebt(state, b)) + '"></label></div>';
+
     h += '<div class="card setgroup"><h3>Пороги и лимиты</h3>' +
       numField('Минимальный запас наличных, ₽', 'minCash', s.minCash,
         'Ниже этой суммы на главной появится предупреждение.') +
@@ -1280,16 +1341,22 @@ var CORE = (function () {
 
   /* ——— нижний лист ——— */
   function openSheet(cfg) {
+    // Отложенное скрытие от предыдущего закрытия погасило бы этот лист,
+    // если один лист открывается сразу вслед за другим.
+    clearTimeout(closeTimer);
     sheet = cfg;
     $('sheetTitle').textContent = cfg.title;
     $('sheetBody').innerHTML = cfg.body();
     $('sheetFoot').innerHTML = cfg.foot ? cfg.foot() : '';
     $('scrim').classList.remove('hide');
     $('sheet').classList.remove('hide');
-    requestAnimationFrame(function () {
-      $('scrim').classList.add('on');
-      $('sheet').classList.add('on');
-    });
+    // Чтение offsetHeight заставляет браузер пересчитать стили прямо сейчас,
+    // и переход срабатывает от видимого стартового состояния. Через
+    // requestAnimationFrame это ломалось: в фоновой вкладке кадр не наступает,
+    // класс «on» не доезжает, и лист навсегда остаётся за краем экрана.
+    void $('sheet').offsetHeight;
+    $('scrim').classList.add('on');
+    $('sheet').classList.add('on');
   }
   function redrawSheet() {
     if (!sheet) return;
@@ -1300,7 +1367,7 @@ var CORE = (function () {
     $('scrim').classList.remove('on');
     $('sheet').classList.remove('on');
     var sc = $('scrim'), sh = $('sheet');
-    setTimeout(function () { sc.classList.add('hide'); sh.classList.add('hide'); }, 240);
+    closeTimer = setTimeout(function () { sc.classList.add('hide'); sh.classList.add('hide'); }, 240);
     sheet = null; draft = null;
   }
 
@@ -1449,11 +1516,38 @@ var CORE = (function () {
     else if (d.type === 'expense') { op.from = d.from; op.cat = d.cat; }
     else { op.from = d.from; op.to = d.to; }
     var editing = !!d.id;
+    var warn = overdraft(op, editing);
     closeSheet();
+    if (warn) {
+      return confirmSheet('Счёт уйдёт в минус', warn, 'Всё равно записать', false, function () {
+        commitOp(op, editing);
+      });
+    }
+    commitOp(op, editing);
+  }
+
+  function commitOp(op, editing) {
     mutate(function () {
       if (editing) state.ops = state.ops.map(function (o) { return o.id === op.id ? op : o; });
       else state.ops.push(op);
     }, editing ? 'Операция изменена' : DONE[op.type]);
+  }
+
+  /* Кредитка уходит в минус по своей природе — это и есть долг.
+     А вот наличные и банк в минусе означают, что учёт разошёлся с реальностью. */
+  function overdraft(op, editing) {
+    if (op.type !== 'expense' && op.type !== 'transfer') return null;
+    if (op.from === 'card') return null;
+    var cand = {
+      v: state.v, settings: state.settings, debts: state.debts,
+      ops: editing
+        ? state.ops.map(function (o) { return o.id === op.id ? op : o; })
+        : state.ops.concat([op])
+    };
+    var after = CORE.balances(cand)[op.from];
+    if (after >= 0) return null;
+    return 'После этой операции на счёте «' + ACC[op.from] + '» будет ' + CORE.money(after) +
+      '. Если деньги на самом деле есть, поправьте баланс в настройках.';
   }
 
   /* ——— возврат долга ——— */
@@ -1562,7 +1656,16 @@ var CORE = (function () {
     }
     if ((t = e.target.closest('[data-op]'))) {
       var op = state.ops.find(function (o) { return o.id === t.dataset.op; });
-      if (op) openOp(op.type, op);
+      if (!op) return;
+      // Корректировку не правят, а отменяют: вместо неё делают новую.
+      if (op.type === 'adjust') {
+        return confirmSheet('Удалить корректировку?',
+          'Баланс счёта «' + ACC[op.account] + '» вернётся к тому, что следует из операций.',
+          'Удалить', true, function () {
+            mutate(function () { state = CORE.removeOp(state, op.id); }, 'Корректировка удалена');
+          });
+      }
+      openOp(op.type, op);
       return;
     }
     if (e.target.closest('[data-pay]')) {
@@ -1642,6 +1745,23 @@ var CORE = (function () {
   });
 
   document.addEventListener('change', function (e) {
+    var fx = e.target.closest('[data-fix]');
+    if (fx) {
+      var acc = fx.dataset.fix;
+      var want = Math.round(CORE.num((fx.value || '').replace(/\s/g, '')));
+      var bal = CORE.balances(state);
+      // Для кредитки поле — это долг, а баланс счёта равен минус долгу.
+      var cur = acc === 'card' ? Math.round(CORE.cardDebt(state, bal)) : Math.round(bal[acc]);
+      if (want === cur) return render();
+      var delta = acc === 'card' ? (-want - bal.card) : (want - bal[acc]);
+      return mutate(function () {
+        state.ops.push({
+          id: uid(), type: 'adjust', date: CORE.todayStr(),
+          account: acc, amount: Math.round(delta), note: ''
+        });
+      }, 'Баланс поправлен на ' + CORE.signed(Math.round(delta)));
+    }
+
     var t = e.target.closest('[data-set]');
     if (t) {
       var key = t.dataset.set, val = t.value;
